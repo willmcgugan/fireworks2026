@@ -100,13 +100,14 @@ class Particle:
 class Firework:
     """A firework that launches, arcs, and explodes."""
     
-    def __init__(self, canvas_width: int, canvas_height: int):
+    def __init__(self, canvas_width: int, canvas_height: int, camera_z: float = 0.0):
         """
         Initialize a firework.
         
         Args:
             canvas_width: Width of the canvas in pixels
             canvas_height: Height of the canvas in pixels
+            camera_z: Current Z position of the camera
         """
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
@@ -114,10 +115,14 @@ class Firework:
         # Random neon color
         self.color = self._random_neon_color()
         
-        # Launch from bottom of screen
+        # Launch from bottom of screen, always ahead of the camera
         self.x = random.uniform(canvas_width * 0.2, canvas_width * 0.8)
         self.y = canvas_height - 1
-        self.z = 0.0
+        # Spawn at camera position plus some forward distance
+        self.z = camera_z + random.uniform(50.0, 150.0)
+        
+        # Calculate target explosion height (top quarter to top half of screen)
+        self.target_y = random.uniform(canvas_height * 0.15, canvas_height * 0.4)
         
         # Launch velocity (upward with slight horizontal drift)
         self.vx = random.uniform(-20, 20)
@@ -127,6 +132,8 @@ class Firework:
         # Explosion parameters
         self.exploded = False
         self.particles: List[Particle] = []
+        self.apex_reached = False
+        self.time_since_apex = 0.0
         
         # Trail particle for launch phase
         self.launch_trail: List[Tuple[float, float]] = []
@@ -167,13 +174,19 @@ class Firework:
             if len(self.launch_trail) > 15:
                 self.launch_trail.pop(0)
             
-            # Check if we should explode (when velocity becomes positive or reaches apex)
-            if self.vy > -20:
-                self.explode()
+            # Check if firework has reached apex (velocity becomes positive/downward)
+            if self.vy > 0 and not self.apex_reached:
+                self.apex_reached = True
+            
+            # If apex reached, wait about 1 second before exploding
+            if self.apex_reached:
+                self.time_since_apex += dt
+                if self.time_since_apex >= 1.0:
+                    self.explode()
         else:
-            # Update explosion particles
+            # Update explosion particles with reduced gravity for better spread
             for particle in self.particles:
-                particle.update(dt)
+                particle.update(dt, gravity=10.0, air_resistance=0.98)
             
             # Remove dead particles
             self.particles = [p for p in self.particles if p.is_alive()]
@@ -182,9 +195,9 @@ class Firework:
         """Create explosion particles."""
         self.exploded = True
         
-        # Generate particles in all directions (more particles, slower speed)
+        # Generate particles in all directions with higher speed for more dramatic effect
         num_particles = random.randint(270, 450)
-        speed = random.uniform(25, 40)
+        speed = random.uniform(60, 90)
         
         for i in range(num_particles):
             # Random direction on a sphere
@@ -209,18 +222,37 @@ class Firework:
             )
             self.particles.append(particle)
     
-    def render(self, canvas: BrailleCanvas):
+    def render(self, canvas: BrailleCanvas, camera_z: float = 0.0):
         """
         Render firework to canvas.
         
         Args:
             canvas: BrailleCanvas to render to
+            camera_z: Z position of the camera
         """
         if not self.exploded:
-            # Render launch trail - collect all points first
+            # Render launch trail with perspective
             if self.launch_trail:
-                points = [(int(x), int(y)) for x, y in self.launch_trail 
-                         if 0 <= x < canvas.width and 0 <= y < canvas.height]
+                points = []
+                canvas_w = canvas.width
+                canvas_h = canvas.height
+                center_x = canvas_w / 2.0
+                center_y = canvas_h / 2.0
+                camera_distance = 200.0
+                
+                for x, y in self.launch_trail:
+                    # Apply perspective projection to trail points
+                    z_relative = self.z - camera_z
+                    z_offset = z_relative + camera_distance
+                    
+                    if z_offset > 0:
+                        scale = camera_distance / z_offset
+                        screen_x = center_x + (x - center_x) * scale
+                        screen_y = center_y + (y - center_y) * scale
+                        
+                        if 0 <= screen_x < canvas_w and 0 <= screen_y < canvas_h:
+                            points.append((int(screen_x), int(screen_y)))
+                
                 if points:
                     canvas.plot(self.color, points)
         else:
@@ -231,13 +263,25 @@ class Firework:
             canvas_h = canvas.height
             center_x = canvas_w / 2.0
             center_y = canvas_h / 2.0
+            camera_distance = 200.0
             
             for particle in self.particles:
-                pos = particle.get_2d_position(camera_distance=200.0, center_x=center_x, center_y=center_y)
-                # Check bounds and that particle is visible (not behind camera)
-                x, y = pos
+                # Adjust particle Z position relative to camera
+                z_relative = particle.z - camera_z
+                z_offset = z_relative + camera_distance
+                
+                if z_offset <= 0:
+                    # Particle is behind camera, don't render
+                    continue
+                
+                # Apply perspective scaling
+                scale = camera_distance / z_offset
+                screen_x = center_x + (particle.x - center_x) * scale
+                screen_y = center_y + (particle.y - center_y) * scale
+                
+                x, y = int(screen_x), int(screen_y)
                 if 0 <= x < canvas_w and 0 <= y < canvas_h:
-                    points.append(pos)
+                    points.append((x, y))
             
             if points:
                 canvas.plot(self.color, points)
@@ -265,6 +309,10 @@ def main():
     # Fireworks list
     fireworks: List[Firework] = []
     
+    # Camera animation
+    camera_z = 0.0
+    camera_speed = 15.0  # Camera moves forward at 15 pixels/second through Z space
+    
     # Timing
     target_fps = 60
     frame_time = 1.0 / target_fps
@@ -291,9 +339,12 @@ def main():
             last_frame_time = current_time
             elapsed = current_time - start_time
             
+            # Animate camera moving forward
+            camera_z += camera_speed * dt
+            
             # Spawn new fireworks
             if elapsed - last_spawn_time > spawn_interval:
-                fireworks.append(Firework(canvas_width, canvas_height))
+                fireworks.append(Firework(canvas_width, canvas_height, camera_z))
                 last_spawn_time = elapsed
                 spawn_interval = random.uniform(0.5, 1.5)
             
@@ -301,15 +352,15 @@ def main():
             for firework in fireworks:
                 firework.update(dt)
             
-            # Remove finished fireworks
-            fireworks = [f for f in fireworks if not f.is_finished()]
+            # Remove finished fireworks (and those that passed behind camera)
+            fireworks = [f for f in fireworks if not f.is_finished() and f.z - camera_z > -50.0]
             
             # Clear canvas
             canvas.clear(0)
             
-            # Render all fireworks
+            # Render all fireworks with camera position
             for firework in fireworks:
-                firework.render(canvas)
+                firework.render(canvas, camera_z)
             
             # Render to screen (single write operation is faster)
             output = "\033[H" + canvas.render()
