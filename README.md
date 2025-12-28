@@ -5,11 +5,9 @@
 Install with:
 
 ```
-uvx ny2026
+uvx ny2026@latest
 ```
 
 Requires [UV](https://docs.astral.sh/uv/getting-started/installation/)
 
-This project was entirely vibe coded with [Toad](https://github.com/batrachianai/toad) and [Claude Code](https://code.claude.com/docs/en/overview)
-
-Don't ask me how it works!
+This project was mostly vibe coded with [Toad](https://github.com/batrachianai/toad) and [Claude Code](https://code.claude.com/docs/en/overview)
