@@ -420,10 +420,10 @@ class Particle:
 
         # Apply air resistance (damping) to all velocities
         # This causes particles to slow down over time
-        damping = air_resistance**dt
-        self.vx *= damping
-        self.vy *= damping
-        self.vz *= damping
+        # Use per-frame damping for more noticeable effect
+        self.vx *= air_resistance
+        self.vy *= air_resistance
+        self.vz *= air_resistance
 
         # Update position
         self.x += self.vx * dt
@@ -562,7 +562,7 @@ class Firework:
         else:
             # Update explosion particles with reduced gravity for better spread
             for particle in self.particles:
-                particle.update(dt, gravity=10.0, air_resistance=0.98)
+                particle.update(dt, gravity=10.0, air_resistance=0.97)
 
             # Remove dead particles
             self.particles = [p for p in self.particles if p.is_alive()]
@@ -572,8 +572,8 @@ class Firework:
         self.exploded = True
 
         # Generate particles in all directions with higher speed for more dramatic effect
-        num_particles = random.randint(270, 450)
-        speed = random.uniform(60, 90)
+        num_particles = random.randint(450, 750)
+        speed = random.uniform(140, 210)
 
         for i in range(num_particles):
             # Random direction on a sphere
@@ -771,7 +771,7 @@ def fireworks():
             if midnight_reached and elapsed - last_spawn_time > spawn_interval:
                 fireworks.append(Firework(canvas_width, canvas_height, camera_z))
                 last_spawn_time = elapsed
-                spawn_interval = random.uniform(0.2, 1.0)
+                spawn_interval = random.uniform(0.2, 0.8)
 
             # Update all fireworks
             for firework in fireworks:
