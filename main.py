@@ -12,6 +12,7 @@ import threading
 import queue
 import numpy as np
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Tuple, Optional
 from braille_canvas import BrailleCanvas
 import traceback
@@ -529,14 +530,17 @@ class SoundManager:
 
 def get_countdown_to_newyear_2026() -> Tuple[str, bool]:
     """
-    Calculate time remaining until New Year's Day 2026 (2026-01-01 00:00:00 UTC).
+    Calculate time remaining until New Year's Day 2026 (2026-01-01 00:00:00 local time).
 
     Returns:
         Tuple of (countdown string in format "HH:MM:SS", midnight_reached bool)
     """
-    # New Year's Day 2026 UTC
-    target = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
+    # Get current time in local timezone
+    now = datetime.now().astimezone()
+    
+    # New Year's Day 2026 in local timezone
+    # Use astimezone() to get the timezone from the current time
+    target = datetime(2026, 1, 1, 0, 0, 0, tzinfo=now.tzinfo)
 
     # Calculate difference
     diff = target - now
