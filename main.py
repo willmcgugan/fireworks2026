@@ -350,42 +350,47 @@ class SoundManager:
         if not self.enabled:
             return None
 
-        duration = self.duration
+        try:
+            duration = self.duration
 
-        # Create time array
-        t = np.linspace(0, duration, int(self.sample_rate * duration))
+            # Create time array
+            t = np.linspace(0, duration, int(self.sample_rate * duration))
 
-        # Explosion is mostly noise with low frequency emphasis
-        # Generate white noise
-        noise = np.random.normal(0, 1, len(t))
+            # Explosion is mostly noise with low frequency emphasis
+            # Generate white noise
+            noise = np.random.normal(0, 1, len(t))
 
-        # Apply low-pass filter effect by adding low-frequency rumble
-        rumble_freq = 60
-        rumble = np.sin(2 * np.pi * rumble_freq * t)
-        rumble += 0.5 * np.sin(2 * np.pi * rumble_freq * 2 * t)
+            # Apply low-pass filter effect by adding low-frequency rumble
+            rumble_freq = 60
+            rumble = np.sin(2 * np.pi * rumble_freq * t)
+            rumble += 0.5 * np.sin(2 * np.pi * rumble_freq * 2 * t)
 
-        # Combine noise and rumble
-        wave = 0.7 * noise + 0.3 * rumble
+            # Combine noise and rumble
+            wave = 0.7 * noise + 0.3 * rumble
 
-        # Apply sharp attack and exponential decay envelope
-        envelope = np.exp(-3 * t / duration)
-        wave *= envelope
+            # Apply sharp attack and exponential decay envelope
+            envelope = np.exp(-3 * t / duration)
+            wave *= envelope
 
-        # Add a bit of crackle (short bursts)
-        crackle = np.random.choice([0, 1], size=len(t), p=[0.95, 0.05])
-        crackle = crackle * np.random.normal(0, 0.5, len(t))
-        wave += crackle * envelope
+            # Add a bit of crackle (short bursts)
+            crackle = np.random.choice([0, 1], size=len(t), p=[0.95, 0.05])
+            crackle = crackle * np.random.normal(0, 0.5, len(t))
+            wave += crackle * envelope
 
-        # Apply simple low-pass filter using moving average
-        # This muffles high frequencies while keeping low frequencies
-        window_size = 15  # Larger window = more muffling
-        kernel = np.ones(window_size) / window_size
-        wave_filtered = np.convolve(wave, kernel, mode="same")
+            # Apply simple low-pass filter using moving average
+            # This muffles high frequencies while keeping low frequencies
+            window_size = 15  # Larger window = more muffling
+            kernel = np.ones(window_size) / window_size
+            wave_filtered = np.convolve(wave, kernel, mode="same")
 
-        # Normalize and keep as float32 for sounddevice
-        wave_filtered = np.clip(wave_filtered, -1, 1) * 0.5  # Reduce volume to 50%
+            # Normalize and keep as float32 for sounddevice
+            wave_filtered = np.clip(wave_filtered, -1, 1) * 0.5  # Reduce volume to 50%
 
-        return wave_filtered.astype(np.float32)
+            return wave_filtered.astype(np.float32)
+        except Exception:
+            # Silently fail on any sound generation error
+            self.enabled = False
+            return None
 
     def _generate_stereo_cache(self):
         """Pre-generate stereo variations at different pan positions.
@@ -396,60 +401,75 @@ class SoundManager:
         if not self.enabled or self.explosion_sound_data is None:
             return
 
-        # Generate 17 positions: -1.0, -0.875, -0.75, ..., 0, ..., 0.75, 0.875, 1.0
-        # This gives us 8 left positions, center, and 8 right positions
-        for i in range(17):
-            pan = -1.0 + (i * 0.125)  # Map index to -1.0 to 1.0
+        try:
+            # Generate 17 positions: -1.0, -0.875, -0.75, ..., 0, ..., 0.75, 0.875, 1.0
+            # This gives us 8 left positions, center, and 8 right positions
+            for i in range(17):
+                pan = -1.0 + (i * 0.125)  # Map index to -1.0 to 1.0
 
-            # Calculate left and right channel gains using constant power panning
-            pan_angle = (pan + 1) * (np.pi / 4)  # Map -1..1 to 0..pi/2
-            left_gain = np.cos(pan_angle)
-            right_gain = np.sin(pan_angle)
+                # Calculate left and right channel gains using constant power panning
+                pan_angle = (pan + 1) * (np.pi / 4)  # Map -1..1 to 0..pi/2
+                left_gain = np.cos(pan_angle)
+                right_gain = np.sin(pan_angle)
 
-            # Create stereo audio by applying gains to mono source
-            mono_data = self.explosion_sound_data
-            stereo_data = np.column_stack(
-                (mono_data * left_gain, mono_data * right_gain)
-            ).astype(np.float32)  # Ensure float32 dtype for sounddevice
+                # Create stereo audio by applying gains to mono source
+                mono_data = self.explosion_sound_data
+                stereo_data = np.column_stack(
+                    (mono_data * left_gain, mono_data * right_gain)
+                ).astype(np.float32)  # Ensure float32 dtype for sounddevice
 
-            # Store in cache with quantized pan value as key
-            self.stereo_cache[round(pan, 3)] = stereo_data
+                # Store in cache with quantized pan value as key
+                self.stereo_cache[round(pan, 3)] = stereo_data
+        except Exception:
+            # Silently fail on any stereo cache generation error
+            self.enabled = False
+            self.stereo_cache = {}
 
     def _start_sound_thread(self):
         """Start the dedicated sound playback thread."""
-        self.running = True
-        self.sound_thread = threading.Thread(
-            target=self._sound_playback_loop, daemon=True
-        )
-        self.sound_thread.start()
+        try:
+            self.running = True
+            self.sound_thread = threading.Thread(
+                target=self._sound_playback_loop, daemon=True
+            )
+            self.sound_thread.start()
+        except Exception:
+            # Silently fail on thread creation error
+            self.enabled = False
+            self.running = False
 
     def _audio_callback(self, outdata, frames, time_info, status):
         """Callback to fill audio buffer with mixed sounds."""
-        # Zero out the buffer
-        outdata.fill(0)
+        try:
+            # Zero out the buffer
+            outdata.fill(0)
 
-        with self.sound_lock:
-            # Mix all active sounds
-            sounds_to_remove = []
+            with self.sound_lock:
+                # Mix all active sounds
+                sounds_to_remove = []
 
-            for i, (sound_data, position) in enumerate(self.active_sounds):
-                # Calculate how much of this sound we can output
-                remaining = len(sound_data) - position
-                to_output = min(remaining, frames)
+                for i, (sound_data, position) in enumerate(self.active_sounds):
+                    # Calculate how much of this sound we can output
+                    remaining = len(sound_data) - position
+                    to_output = min(remaining, frames)
 
-                # Add this sound to the output buffer (mix)
-                outdata[:to_output] += sound_data[position : position + to_output]
+                    # Add this sound to the output buffer (mix)
+                    outdata[:to_output] += sound_data[position : position + to_output]
 
-                # Update position
-                self.active_sounds[i][1] += to_output
+                    # Update position
+                    self.active_sounds[i][1] += to_output
 
-                # Mark for removal if finished
-                if position + to_output >= len(sound_data):
-                    sounds_to_remove.append(i)
+                    # Mark for removal if finished
+                    if position + to_output >= len(sound_data):
+                        sounds_to_remove.append(i)
 
-            # Remove finished sounds (in reverse order to maintain indices)
-            for i in reversed(sounds_to_remove):
-                self.active_sounds.pop(i)
+                # Remove finished sounds (in reverse order to maintain indices)
+                for i in reversed(sounds_to_remove):
+                    self.active_sounds.pop(i)
+        except Exception:
+            # Silently fail on audio callback errors to prevent crashes
+            # Just output silence if there's an error
+            outdata.fill(0)
 
     def _sound_playback_loop(self):
         """Main loop for sound playback thread. Manages audio stream."""
@@ -481,9 +501,13 @@ class SoundManager:
 
     def stop(self):
         """Stop the sound playback thread."""
-        self.running = False
-        if self.sound_thread:
-            self.sound_thread.join(timeout=1.0)
+        try:
+            self.running = False
+            if self.sound_thread:
+                self.sound_thread.join(timeout=1.0)
+        except Exception:
+            # Silently fail on stop errors
+            pass
 
     def play_explosion(self, x: float, screen_width: float):
         """Play the explosion sound with stereo panning based on position.
@@ -537,7 +561,7 @@ def get_countdown_to_newyear_2026() -> Tuple[str, bool]:
     """
     # Get current time in local timezone
     now = datetime.now().astimezone()
-    
+
     # New Year's Day 2026 in local timezone
     # Use astimezone() to get the timezone from the current time
     target = datetime(2026, 1, 1, 0, 0, 0, tzinfo=now.tzinfo)
@@ -756,7 +780,7 @@ class Firework:
         distance_to_target = self.target_y - self.y  # Negative value (going up)
         # u = sqrt(-2 * gravity * distance_to_target)
         required_velocity = math.sqrt(-2 * gravity * distance_to_target)
-        
+
         # Launch velocity (upward with slight horizontal drift)
         self.vx = random.uniform(-20, 20)
         self.vy = -required_velocity  # Negative because upward
@@ -775,14 +799,24 @@ class Firework:
         """Generate a realistic firework color."""
         # Common real firework colors based on metal compounds used in pyrotechnics
         firework_colors = [
-            (255, 50, 50),    # Red (Strontium)
-            (255, 140, 0),    # Orange (Calcium)
-            (255, 215, 0),    # Gold/Yellow (Sodium, Iron)
+            (255, 50, 50),  # Red (Strontium)
+            (255, 140, 0),  # Orange (Calcium)
+            (255, 215, 0),  # Gold/Yellow (Sodium, Iron)
             (240, 240, 240),  # White/Silver (Aluminum, Magnesium)
-            (50, 255, 50),    # Green (Barium)
+            (50, 255, 50),  # Green (Barium)
             (100, 150, 255),  # Blue (Copper)
             (200, 100, 255),  # Purple (Strontium + Copper)
             (255, 192, 203),  # Pink (Strontium + Titanium)
+            (0, 255, 255),  # Cyan/Turquoise (Copper compounds)
+            (220, 20, 60),  # Deep Red/Crimson (Lithium)
+            (200, 255, 0),  # Lime Green (Barium with additives)
+            (80, 200, 255),  # Electric Blue (Copper chloride)
+            (180, 140, 255),  # Lavender (Potassium/Rubidium)
+            (255, 180, 120),  # Peach (Calcium + Strontium)
+            (255, 191, 0),  # Amber (Iron + Charcoal)
+            (255, 250, 200),  # Golden White (Titanium sparkles)
+            (255, 0, 255),  # Magenta (Strontium + Copper)
+            (150, 255, 200),  # Mint Green (Barium + Copper)
         ]
         r, g, b = random.choice(firework_colors)
         return BrailleCanvas.rgb_color(r, g, b)
