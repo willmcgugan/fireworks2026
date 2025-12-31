@@ -1,4 +1,4 @@
-# A countdown to 2026 in your terminal.
+# New Year's Fireworks Simulator in your Terminal
 
 At your desk for New Years? Crack open a beer and a terminal. Run this app, and wait for the fireworks!
 
