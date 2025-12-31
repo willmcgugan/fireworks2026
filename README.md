@@ -27,13 +27,20 @@ This project was built with [Toad](https://github.com/batrachianai/toad) and [Cl
 
 It was an excercise in "vibe coding". Something I hadn't done a great deal of.
 
-Could I have done this "by hand"? Yeah, probably. I am an ex game developer and I work with terminals. Claude one-shotted much of this. But it did create bugs that it couldn't fix, and I had to use my fleshy mammalian brain to resolve. It really struggled with the audio. There were many rounds of "I see the problem! There it is fixed now", but it did eventually get there.
+Could I have done this "by hand"? Yeah, probably. I am an ex game developer and I work with terminals.
+Claude Code implemented what I asked fairly consistantly, but I did have to be very precise to get good results.
+The prompts were quite granular—I asked for things like "make a partical effect where each particle has a Z dimension and a moves outwords in a random direction".
+It wasn't as simple as "make a cool fireworks effect in the terminal".
+
+Claude did create bugs that it couldn't fix, which I had to use my fleshy mammalian brain to resolve. 
+There was an issue where the braille lines would wrap and break the visuals which it just couldn't grasp.
+It also really struggled with the audio. There were many rounds of "I see the problem! Let me fix it." before it got a solution.
 
 There was also a last minute bug reported by another mamallian brain. It was using UTC for the countdown, which would have made it wrong for anyhone outside the UK.
 
 Of course I should have checked, but I kind of feel that a human would be less likely to make that mistake. If you actually had to type UTC in the code, that should have triggered the realization that it would break for other timezones.
 
-Overall, the coad is not bad. Not good, but not terrible. There are some lines which I don't think are even neccesary. Reminants of failed experiments perhaps. I suspect Claude could easily tidy those up, but you do need to know to ask.
+Overall, the code is not bad. Not good, but not terrible. There are some lines which I don't think are even neccesary. Reminants of failed experiments perhaps. I suspect Claude could easily tidy those up, but you do need to know to ask.
 
 Considering there isn't a large corpus of firework simulations with braille characters in the terminal (I assume), I think Claude did OK here.
 
